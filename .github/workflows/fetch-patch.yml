@@ -1,0 +1,51 @@
+name: fetch-mt5000-patch
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download patch from dmsza
+        run: |
+          mkdir -p patches
+          curl -sSfL -o patches/0001-mt5000-backport-25.12.patch \
+            https://github.com/dmsza/openwrt/commit/194404f.patch
+
+      - name: Byte-level sanity checks
+        run: |
+          set -e
+          P=patches/0001-mt5000-backport-25.12.patch
+          echo "size=$(wc -c < $P) lines=$(wc -l < $P)"
+          head -1 "$P" | grep -q '^From 194404fa4bd3b4d01c084b7447bd66386730532d ' \
+            || { echo "::error::mbox 首行不对"; exit 1; }
+          [ "$(grep -c '^diff --git' "$P")" = "9" ] \
+            || { echo "::error::diff 段落数不是 9"; exit 1; }
+          grep -q '9 files changed, 4175 insertions(+), 4 deletions(-)' "$P" \
+            || { echo "::error::diffstat 不符"; exit 1; }
+          [ "$(grep -c $'\r' "$P" || true)" = "0" ] \
+            || { echo "::error::含 CR"; exit 1; }
+          [ "$(head -c 3 "$P" | od -An -tx1 | tr -d ' \n')" != "efbbbf" ] \
+            || { echo "::error::含 BOM"; exit 1; }
+          [ "$(tail -c 1 "$P" | od -An -tx1 | tr -d ' \n')" = "0a" ] \
+            || { echo "::error::末尾缺换行"; exit 1; }
+          sha256sum "$P" | tee patches/SHA256SUMS
+
+      - name: Check it applies to v25.12.6
+        run: |
+          set -e
+          git clone -q -b v25.12.6 --single-branch \
+            https://github.com/openwrt/openwrt.git /tmp/ow
+          cd /tmp/ow
+          git apply --check -v \
+            "$GITHUB_WORKSPACE/patches/0001-mt5000-backport-25.12.patch"
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add patches/
+          git commit -m "add MT5000 backport patch (from dmsza 194404f)"
+          git push

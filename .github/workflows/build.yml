@@ -29,10 +29,27 @@ jobs:
           git -c user.email=ci@local -c user.name=ci am --3way \
             "$GITHUB_WORKSPACE/patches/0001-mt5000-backport-25.12.patch"
 
+      - name: Install .config
+        run: |
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          echo "--- 仓库根目录内容 ---"
+          ls -la
+          CFG=""
+          for c in configs/mt5000-25.12.config mt5000-25.12.config configs/config.txt config.txt .config; do
+            if [ -f "$c" ]; then CFG="$c"; break; fi
+          done
+          if [ -z "$CFG" ]; then
+            echo "::error::仓库里找不到配置文件，请核对上面列出的文件名"
+            exit 1
+          fi
+          echo "使用配置文件: $CFG"
+          echo "CFG=$CFG" >> "$GITHUB_ENV"
+          cp "$CFG" openwrt/.config
+
       - name: Configure
         run: |
           cd openwrt
-          cp "$GITHUB_WORKSPACE/configs/mt5000-25.12.config" .config
           make defconfig
           ./scripts/feeds update -a
           ./scripts/feeds install -a
@@ -41,12 +58,13 @@ jobs:
         if: always()
         run: |
           cd openwrt
-          grep -oE '^CONFIG_[A-Za-z0-9_]+=y' "$GITHUB_WORKSPACE/configs/mt5000-25.12.config" \
-            | sed 's/=y$//' | sort -u > /tmp/want
-          grep -oE '^CONFIG_[A-Za-z0-9_]+=y' .config \
-            | sed 's/=y$//' | sort -u > /tmp/got
+          W="$GITHUB_WORKSPACE/${CFG:-config.txt}"
+          grep -oE '^CONFIG_[A-Za-z0-9_]+=y' "$W" 2>/dev/null | sed 's/=y$//' | sort -u > /tmp/want || true
+          grep -oE '^CONFIG_[A-Za-z0-9_]+=y' .config 2>/dev/null | sed 's/=y$//' | sort -u > /tmp/got || true
           echo "=== 你写了但没生效的符号（多半是无效包名）==="
           comm -23 /tmp/want /tmp/got || true
+          echo "=== 实际生效的 target/device 行 ==="
+          grep -E '^CONFIG_TARGET_(mediatek|mediatek_filogic)=' .config || true
 
       - name: Download sources
         run: cd openwrt && make -j$(nproc) download
@@ -67,7 +85,6 @@ jobs:
           include-hidden-files: true
 
       - name: Upload firmware bundle
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mt5000-25.12.6-filogic

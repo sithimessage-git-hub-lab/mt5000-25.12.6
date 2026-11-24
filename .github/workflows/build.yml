@@ -19,9 +19,7 @@ jobs:
           df -h /
 
       - name: Clone OpenWrt v25.12.6
-        run: |
-          git clone -q -b v25.12.6 --single-branch \
-            https://github.com openwrt
+        run: git clone -q -b v25.12.6 --single-branch https://github.com openwrt
 
       - name: Apply MT5000 backport patch
         run: |

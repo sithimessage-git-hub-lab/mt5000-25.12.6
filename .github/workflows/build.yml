@@ -36,7 +36,7 @@ jobs:
           echo "--- 仓库根目录内容 ---"
           ls -la
           CFG=""
-          for c in configs/mt5000-25.12.config mt5000-25.12.config configs/config.txt config.txt .config; do
+          for c in configs/mt5000-25.12.config mt5000-25.12.config configs/config.txt config.txt seed.config .config; do
             if [ -f "$c" ]; then CFG="$c"; break; fi
           done
           if [ -z "$CFG" ]; then
@@ -50,9 +50,9 @@ jobs:
       - name: Configure
         run: |
           cd openwrt
-          make defconfig
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          make defconfig
 
       - name: Config sanity report
         if: always()

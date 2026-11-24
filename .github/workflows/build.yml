@@ -21,7 +21,7 @@ jobs:
       - name: Clone OpenWrt v25.12.6
         run: |
           git clone -q -b v25.12.6 --single-branch \
-            https://github.com/openwrt/openwrt.git openwrt
+            https://github.com openwrt
 
       - name: Apply MT5000 backport patch
         run: |
@@ -29,7 +29,13 @@ jobs:
           git -c user.email=ci@local -c user.name=ci am --3way \
             "$GITHUB_WORKSPACE/patches/0001-mt5000-backport-25.12.patch"
 
-      - name: Install .config
+      - name: Update and install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Install .config and defconfig
         run: |
           set -e
           cd "$GITHUB_WORKSPACE"
@@ -46,12 +52,8 @@ jobs:
           echo "使用配置文件: $CFG"
           echo "CFG=$CFG" >> "$GITHUB_ENV"
           cp "$CFG" openwrt/.config
-
-      - name: Configure
-        run: |
           cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          rm -rf tmp/
           make defconfig
 
       - name: Config sanity report
